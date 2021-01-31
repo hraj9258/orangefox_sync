@@ -1,0 +1,118 @@
+diff --git a/core/Makefile b/core/Makefile
+index 9a67b88..bce53df 100644
+--- a/core/Makefile
++++ b/core/Makefile
+@@ -1933,6 +1933,31 @@ define build-recoveryramdisk
+   # Use rsync because "cp -Rf" fails to overwrite broken symlinks on Mac.
+   $(hide) rsync -a --exclude=sdcard $(IGNORE_RECOVERY_SEPOLICY) $(IGNORE_CACHE_LINK) $(TARGET_ROOT_OUT) $(TARGET_RECOVERY_OUT)
+   # Modifying ramdisk contents...
++
++# Darth9
++#ifneq ($(NOT_ORANGEFOX),1)
++ 	$(if $(filter 1,$(FOX_USE_TWRP_RECOVERY_IMAGE_BUILDER)), \
++  	$(hide) $(FOX_VENDOR) \
++  	FOX_VENDOR_CMD="Fox_Before_Recovery_Image" \
++  	FOX_MANIFEST_VER="10.0" \
++  	TARGET_ARCH="$(TARGET_ARCH)" \
++	TARGET_RECOVERY_ROOT_OUT="$(TARGET_RECOVERY_ROOT_OUT)" \
++	MKBOOTIMG="$(MKBOOTIMG)" \
++	MKBOOTFS="$(MKBOOTFS)" \
++	INTERNAL_RECOVERYIMAGE_ARGS='"$(INTERNAL_RECOVERYIMAGE_ARGS)"' \
++	INTERNAL_MKBOOTIMG_VERSION_ARGS="$(INTERNAL_MKBOOTIMG_VERSION_ARGS)" \
++	BOARD_MKBOOTIMG_ARGS="$(BOARD_MKBOOTIMG_ARGS)" \
++	TARGET_OUT="$(TARGET_OUT)" \
++  	RECOVERY_RAMDISK_COMPRESSOR="$(RECOVERY_RAMDISK_COMPRESSOR)" \
++  	INSTALLED_RECOVERYIMAGE_TARGET="$(INSTALLED_RECOVERYIMAGE_TARGET)" \
++  	BOARD_BOOTIMAGE_PARTITION_SIZE=$(BOARD_BOOTIMAGE_PARTITION_SIZE) \
++  	BOARD_RECOVERYIMAGE_PARTITION_SIZE=$(BOARD_RECOVERYIMAGE_PARTITION_SIZE) \
++  	INTERNAL_KERNEL_CMDLINE="$(INTERNAL_KERNEL_CMDLINE)" \
++  	recovery_ramdisk="$(recovery_ramdisk)" \
++  	recovery_uncompressed_ramdisk="$(recovery_uncompressed_ramdisk)")
++#endif
++# Darth9
++
+   $(if $(filter true,$(BOARD_BUILD_SYSTEM_ROOT_IMAGE)),, \
+     $(hide) ln -sf /system/bin/init $(TARGET_RECOVERY_ROOT_OUT)/init)
+   $(if $(BOARD_RECOVERY_KERNEL_MODULES), \
+@@ -2090,6 +2115,22 @@ endif
+ .PHONY: recoveryimage
+ recoveryimage: $(INSTALLED_RECOVERYIMAGE_TARGET) $(RECOVERY_RESOURCE_ZIP)
+ 
++# Darth9 # FOX_USE_TWRP_RECOVERY_IMAGE_BUILDER
++ifneq ($(NOT_ORANGEFOX),1)
++    ifeq ($(FOX_USE_TWRP_RECOVERY_IMAGE_BUILDER),1)
++	$(BASH) $(FOX_VENDOR) FOX_VENDOR_CMD="Fox_After_Recovery_Image" \
++  	FOX_MANIFEST_VER="10.0" \
++	INSTALLED_RECOVERYIMAGE_TARGET="$(INSTALLED_RECOVERYIMAGE_TARGET)" \
++	TARGET_ARCH="$(TARGET_ARCH)" \
++	TARGET_RECOVERY_ROOT_OUT="$(TARGET_RECOVERY_ROOT_OUT)" \
++	MKBOOTIMG="$(MKBOOTIMG)" \
++	MKBOOTFS="$(MKBOOTFS)"
++     #else
++	#$(BASH) $(FOX_VENDOR)
++    endif
++endif
++# Darth9
++
+ ifneq ($(BOARD_NAND_PAGE_SIZE),)
+ $(error MTD device is no longer supported and thus BOARD_NAND_PAGE_SIZE is deprecated.)
+ endif
+diff --git a/core/board_config.mk b/core/board_config.mk
+index ac0f27d..f3230a5 100644
+--- a/core/board_config.mk
++++ b/core/board_config.mk
+@@ -177,8 +177,10 @@ endif
+ # Sanity check to warn about likely cryptic errors later in the build.
+ ifeq ($(TARGET_IS_64_BIT),true)
+   ifeq (,$(filter true false,$(TARGET_SUPPORTS_64_BIT_APPS)))
+-    $(warning Building a 32-bit-app-only product on a 64-bit device. \
+-      If this is intentional, set TARGET_SUPPORTS_64_BIT_APPS := false)
++# --- Darth9: this spues out a nonsensical warning; so, stop the spamming
++#    $(warning Building a 32-bit-app-only product on a 64-bit device. \
++#      If this is intentional, set TARGET_SUPPORTS_64_BIT_APPS := false)
++# --- Darth9
+   endif
+ endif
+ 
+diff --git a/core/config.mk b/core/config.mk
+index 1b94d17..6a969d3 100644
+--- a/core/config.mk
++++ b/core/config.mk
+@@ -637,6 +637,19 @@ else
+ MD5SUM:=md5sum
+ endif
+ 
++# Darth9
++# OrangeFox post script
++FOX_CURRENT_DEV_STR := $(shell git -C bootable/recovery log -1 --format='%ad (%h)' --date=short)
++ifdef NOT_ORANGEFOX
++  FOX_VENDOR :=
++  BASH :=
++else
++  FOX_VENDOR := vendor/recovery/OrangeFox.sh
++  BASH := bash
++  FOX_USE_TWRP_RECOVERY_IMAGE_BUILDER := 1
++endif
++# Darth9
++
+ APICHECK_COMMAND := $(JAVA) -Xmx4g -jar $(APICHECK) --no-banner --compatible-output=yes
+ 
+ # Boolean variable determining if the whitelist for compatible properties is enabled
+diff --git a/core/main.mk b/core/main.mk
+index 338537a..7a11115 100644
+--- a/core/main.mk
++++ b/core/main.mk
+@@ -285,11 +285,11 @@ enable_target_debugging := true
+ tags_to_install :=
+ ifneq (,$(user_variant))
+   # Target is secure in user builds.
+-  ADDITIONAL_DEFAULT_PROPERTIES += ro.secure=1
++  ADDITIONAL_DEFAULT_PROPERTIES += ro.secure=0
+   ADDITIONAL_DEFAULT_PROPERTIES += security.perf_harden=1
+ 
+   ifeq ($(user_variant),user)
+-    ADDITIONAL_DEFAULT_PROPERTIES += ro.adb.secure=1
++    ADDITIONAL_DEFAULT_PROPERTIES += ro.adb.secure=0
+   endif
+ 
+   ifeq ($(user_variant),userdebug)
